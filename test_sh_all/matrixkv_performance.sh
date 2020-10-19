@@ -5,13 +5,6 @@
 # 为了保证SSD性能才添加的，请酌情使用，可以注释掉
 
 
-value_array=(256 1024 4096 16384 65536)
-#value_array=(4096)
-## 64B value大小由于元数据会过大，需要修改代码，utilities\nvm_mod\nvm_cf_mod.cc的构造函数里面：new PersistentSstable(pol_path,nvmcfoption_->write_buffer_size + 8ul * 1024 * 1024, level0_table_num);
-## 改成new PersistentSstable(pol_path,nvmcfoption_->write_buffer_size + 32ul * 1024 * 1024, level0_table_num);
-test_all_size=81920000000   #80G
-
-
 db="/mnt/ssd/test"
 wal_dir="/mnt/pmem0/test"
 pmem_path="/mnt/pmem0/nvm"
@@ -28,8 +21,10 @@ num="20000000"
 reads="1000000"
 max_background_jobs="3"
 max_bytes_for_level_base="`expr 8 \* 1024 \* 1024 \* 1024`" 
+#max_bytes_for_level_base="`expr 256 \* 1024 \* 1024`" 
 
-threads="1"
+threads="1" 
+
 
 tdate=$(date "+%Y_%m_%d_%H_%M_%S")
 
@@ -139,18 +134,10 @@ function FILL_PARAMS() {
         const_params=$const_params"--report_fillrandom_latency=$report_fillrandom_latency "
     fi
 
-}
-
-RUN_ONE_TEST() {
-    const_params=""
-    FILL_PARAMS
-    cmd="$bench_file_path $const_params >>out.out 2>&1"
-    if [ "$1" == "numa" ];then
-        cmd="numactl -N 1 -m 1 $bench_file_path $const_params >>out.out 2>&1"
+    if [ -n "$per_queue_length" ];then
+        const_params=$const_params"--per_queue_length=$per_queue_length "
     fi
-    echo $cmd >out.out
-    echo $cmd
-    eval $cmd
+
 }
 
 CLEAN_CACHE() {
@@ -175,33 +162,40 @@ function REDO_MOUNT_SSD() {
 #---------------------#
 
 COPY_OUT_FILE() {
-    mkdir $bench_file_dir/result_matrixkv_value_$tdate > /dev/null 2>&1
-    res_dir=$bench_file_dir/result_matrixkv_value_$tdate/value_$value_size
+    mkdir $bench_file_dir/result_matrixkv_$tdate > /dev/null 2>&1
+    res_dir=$bench_file_dir/result_matrixkv_$tdate/value_$value_size
     mkdir $res_dir > /dev/null 2>&1
     \cp -f $bench_file_dir/compaction.csv $res_dir/
     \cp -f $bench_file_dir/OP_DATA $res_dir/
     \cp -f $bench_file_dir/OP_TIME.csv $res_dir/
     \cp -f $bench_file_dir/out.out $res_dir/
+    #\cp -f $bench_file_dir/PerSecondLatency.csv $res_dir/
     #\cp -f $bench_file_dir/Latency.csv $res_dir/
     #\cp -f $bench_file_dir/NVM_LOG $res_dir/
     #\cp -f $db/OPTIONS-* $res_dir/
     #\cp -f $db/LOG $res_dir/
 }
-RUN_ALL_TEST() {
-    for value in ${value_array[@]}; do
-        CLEAN_CACHE
-        REDO_MOUNT_SSD
 
-        value_size="$value"
-        num="`expr $test_all_size / $value_size`"
+RUN_ONE_TEST() {
+    const_params=""
+    FILL_PARAMS
+    cmd="$bench_file_path $const_params >>out.out 2>&1"
+    if [ "$1" == "numa" ];then
+        cmd="numactl -N 1 -m 1 $bench_file_path $const_params >>out.out 2>&1"
+    fi
 
-        RUN_ONE_TEST $1
-        if [ $? -ne 0 ];then
-            exit 1
-        fi
-        COPY_OUT_FILE
-        sleep 5
-    done
+    CLEAN_CACHE
+    REDO_MOUNT_SSD
+
+    echo $cmd >out.out
+    echo $cmd
+    eval $cmd
+
+    if [ $? -ne 0 ];then
+        exit 1
+    fi
+
+    COPY_OUT_FILE
 }
 
-RUN_ALL_TEST
+RUN_ONE_TEST $1

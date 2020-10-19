@@ -1,35 +1,29 @@
 #! /bin/sh
 
-######--- WARNING ---######
-# 脚本有格式化盘函数REDO_MOUNT_SSD，
-# 为了保证SSD性能才添加的，请酌情使用，可以注释掉
+## 本时延测试参考论文：https://github.com/theoanab/SILK-USENIXATC2019
 
 
-value_array=(256 1024 4096 16384 65536)
-#value_array=(4096)
-## 64B value大小由于元数据会过大，需要修改代码，utilities\nvm_mod\nvm_cf_mod.cc的构造函数里面：new PersistentSstable(pol_path,nvmcfoption_->write_buffer_size + 8ul * 1024 * 1024, level0_table_num);
-## 改成new PersistentSstable(pol_path,nvmcfoption_->write_buffer_size + 32ul * 1024 * 1024, level0_table_num);
-test_all_size=81920000000   #80G
-
-
-db="/mnt/ssd/test"
-wal_dir="/mnt/pmem0/test"
+db="/mnt/pmem0/test"
+#wal_dir="/mnt/pmem0/test"
 pmem_path="/mnt/pmem0/nvm"
 use_nvm_module="true"
 
 value_size="4096"
 compression_type="none" #"snappy,none"
 
-benchmarks="fillrandom,stats,wait,clean_cache,stats,readseq,clean_cache,stats,readrandom,stats"
-#benchmarks="fillseq,stats"
-#benchmarks="fillrandom,stats"
+benchmarks="fillrandomcontrolrequest,stats"
 
 num="20000000"
 reads="1000000"
 max_background_jobs="3"
 max_bytes_for_level_base="`expr 8 \* 1024 \* 1024 \* 1024`" 
 
-threads="1"
+threads="3"  ##一个线程记录每秒数据，一个线程生成请求队列，只有一个线程运行请求，
+
+histogram="true"
+request_rate_limit="20000"  #20K
+per_queue_length="16"
+YCSB_uniform_distribution="false"
 
 tdate=$(date "+%Y_%m_%d_%H_%M_%S")
 
@@ -139,18 +133,10 @@ function FILL_PARAMS() {
         const_params=$const_params"--report_fillrandom_latency=$report_fillrandom_latency "
     fi
 
-}
-
-RUN_ONE_TEST() {
-    const_params=""
-    FILL_PARAMS
-    cmd="$bench_file_path $const_params >>out.out 2>&1"
-    if [ "$1" == "numa" ];then
-        cmd="numactl -N 1 -m 1 $bench_file_path $const_params >>out.out 2>&1"
+    if [ -n "$per_queue_length" ];then
+        const_params=$const_params"--per_queue_length=$per_queue_length "
     fi
-    echo $cmd >out.out
-    echo $cmd
-    eval $cmd
+
 }
 
 CLEAN_CACHE() {
@@ -163,45 +149,41 @@ CLEAN_CACHE() {
     sleep 2
 }
 
-#------ Warning ------#
-#为了保证SSD性能，重新挂载SSD，看测试需要，因为SSD会越跑越慢
-#一定不要错误格式化盘了
-
-function REDO_MOUNT_SSD() {
-    umount "/mnt/ssd/"
-    mkfs.ext4 "/dev/sdb1"
-    mount "/dev/sdb1" "/mnt/ssd"
-}
-#---------------------#
 
 COPY_OUT_FILE() {
-    mkdir $bench_file_dir/result_matrixkv_value_$tdate > /dev/null 2>&1
-    res_dir=$bench_file_dir/result_matrixkv_value_$tdate/value_$value_size
+    mkdir $bench_file_dir/result_matrixkv_latency_$tdate > /dev/null 2>&1
+    res_dir=$bench_file_dir/result_matrixkv_latency_$tdate/value_$value_size
     mkdir $res_dir > /dev/null 2>&1
     \cp -f $bench_file_dir/compaction.csv $res_dir/
-    \cp -f $bench_file_dir/OP_DATA $res_dir/
+    #\cp -f $bench_file_dir/OP_DATA $res_dir/
     \cp -f $bench_file_dir/OP_TIME.csv $res_dir/
     \cp -f $bench_file_dir/out.out $res_dir/
+    \cp -f $bench_file_dir/PerSecondLatency.csv $res_dir/
     #\cp -f $bench_file_dir/Latency.csv $res_dir/
     #\cp -f $bench_file_dir/NVM_LOG $res_dir/
     #\cp -f $db/OPTIONS-* $res_dir/
     #\cp -f $db/LOG $res_dir/
 }
-RUN_ALL_TEST() {
-    for value in ${value_array[@]}; do
-        CLEAN_CACHE
-        REDO_MOUNT_SSD
 
-        value_size="$value"
-        num="`expr $test_all_size / $value_size`"
+RUN_ONE_TEST() {
+    const_params=""
+    FILL_PARAMS
+    cmd="$bench_file_path $const_params >>out.out 2>&1"
+    if [ "$1" == "numa" ];then
+        cmd="numactl -N 1 -m 1 $bench_file_path $const_params >>out.out 2>&1"
+    fi
 
-        RUN_ONE_TEST $1
-        if [ $? -ne 0 ];then
-            exit 1
-        fi
-        COPY_OUT_FILE
-        sleep 5
-    done
+    CLEAN_CACHE
+
+    echo $cmd >out.out
+    echo $cmd
+    eval $cmd
+
+    if [ $? -ne 0 ];then
+        exit 1
+    fi
+
+    COPY_OUT_FILE
 }
 
-RUN_ALL_TEST
+RUN_ONE_TEST $1
