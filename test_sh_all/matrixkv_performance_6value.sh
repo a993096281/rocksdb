@@ -1,11 +1,19 @@
 #! /bin/sh
 
+######--- WARNING ---######
+#脚本有格式化盘函数REDO_MOUNT_SSD，
+#为了保证SSD性能才添加的，请酌情使用，可以注释掉
+
+
 value_array=(256 1024 4096 16384 65536)
-#value_array=(256)
+#value_array=(4096)
 test_all_size=81920000000   #80G
 
 
 db="/mnt/ssd/test"
+wal_dir="/mnt/pmem0/test"
+pmem_path="/mnt/pmem0/nvm"
+use_nvm_module="true"
 
 value_size="4096"
 compression_type="none" #"snappy,none"
@@ -20,9 +28,7 @@ max_bytes_for_level_base="`expr 8 \* 1024 \* 1024 \* 1024`"
 
 threads="1"
 
-pmem_path="/mnt/pmem0/nvm"
-use_nvm_module="true"
-
+tdate=$(date "+%Y_%m_%d")
 
 bench_file_path="$(dirname $PWD )/db_bench"
 
@@ -40,7 +46,7 @@ fi
 
 const_params=""
 
-function FILL_PATAMS() {
+function FILL_PARAMS() {
 
     if [ -n "$db" ];then
         const_params=$const_params"--db=$db "
@@ -134,8 +140,11 @@ function FILL_PATAMS() {
 
 RUN_ONE_TEST() {
     const_params=""
-    FILL_PATAMS
+    FILL_PARAMS
     cmd="$bench_file_path $const_params >>out.out 2>&1"
+    if [ "$1" == "numa" ];then
+        cmd="numactl -N 1 -m 1 $bench_file_path $const_params >>out.out 2>&1"
+    fi
     echo $cmd >out.out
     echo $cmd
     eval $cmd
@@ -163,8 +172,8 @@ function REDO_MOUNT_SSD() {
 #---------------------#
 
 COPY_OUT_FILE() {
-    mkdir $bench_file_dir/result_matrixkv_value > /dev/null 2>&1
-    res_dir=$bench_file_dir/result_matrixkv_value/value-$value_size
+    mkdir $bench_file_dir/result_matrixkv_value_$tdate > /dev/null 2>&1
+    res_dir=$bench_file_dir/result_matrixkv_value_$tdate/value_$value_size
     mkdir $res_dir > /dev/null 2>&1
     \cp -f $bench_file_dir/compaction.csv $res_dir/
     \cp -f $bench_file_dir/OP_DATA $res_dir/
