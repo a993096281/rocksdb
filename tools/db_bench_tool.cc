@@ -1975,11 +1975,14 @@ void ReportLatency(Latency *ops_latency, uint64_t num) {
     printf("latency: 99.99%%th(%lu) = [%lu us]\n", cnt, AllLatency(ops_latency[cnt - 1]));
     cnt = 0.99999 * num;
     printf("latency: 99.999%%th(%lu) = [%lu us]\n", cnt, AllLatency(ops_latency[cnt - 1]));
-    printf("-------------------------------\n");
 
+    double avg = 0;
     for(uint64_t i = 0; i < num; i++) {
       RECORD_INFO(4,"%lu,%lu,%lu\n",AllLatency(ops_latency[i]),ops_latency[i].stay_queue_time,ops_latency[i].execute_time);
+      avg = avg + (AllLatency(ops_latency[i]) - avg) / (i + 1);
     }
+    printf("latency: average = [%.1lf us]\n", avg);
+    printf("-------------------------------\n");
 }
 void ReportLatency2(uint64_t *ops_latency, uint64_t num) {
     if( ops_latency == nullptr || num < 10 ) return;
@@ -2016,11 +2019,16 @@ void ReportLatency2(uint64_t *ops_latency, uint64_t num) {
     printf("latency: 99.99%%th(%lu) = [%lu us]\n", cnt, ops_latency[cnt - 1]);
     cnt = 0.99999 * num;
     printf("latency: 99.999%%th(%lu) = [%lu us]\n", cnt, ops_latency[cnt - 1]);
-    printf("-------------------------------\n");
 
+    double avg = 0;
     for(uint64_t i = 0; i < num; i++) {
       RECORD_INFO(4,"%lu\n",ops_latency[i]);
+      avg = avg + (ops_latency[i] - avg) / (i + 1);
+      
     }
+
+    printf("latency: average = [%.1lf us]\n", avg);
+    printf("-------------------------------\n");
 }
 // State shared by all concurrent executions of the same benchmark.
 struct SharedState {

@@ -1,12 +1,14 @@
 #! /bin/sh
 
 ######--- WARNING ---######
-#脚本有格式化盘函数REDO_MOUNT_SSD，
-#为了保证SSD性能才添加的，请酌情使用，可以注释掉
+# 脚本有格式化盘函数REDO_MOUNT_SSD，
+# 为了保证SSD性能才添加的，请酌情使用，可以注释掉
 
 
 value_array=(256 1024 4096 16384 65536)
 #value_array=(4096)
+## 64B value大小由于元数据会过大，需要修改代码，utilities\nvm_mod\nvm_cf_mod.cc的构造函数里面：new PersistentSstable(pol_path,nvmcfoption_->write_buffer_size + 8ul * 1024 * 1024, level0_table_num);
+## 改成new PersistentSstable(pol_path,nvmcfoption_->write_buffer_size + 32ul * 1024 * 1024, level0_table_num);
 test_all_size=81920000000   #80G
 
 
@@ -20,6 +22,7 @@ compression_type="none" #"snappy,none"
 
 benchmarks="fillrandom,stats,wait,clean_cache,stats,readseq,clean_cache,stats,readrandom,stats"
 #benchmarks="fillseq,stats"
+#benchmarks="fillrandom,stats"
 
 num="20000000"
 reads="1000000"
@@ -28,7 +31,7 @@ max_bytes_for_level_base="`expr 8 \* 1024 \* 1024 \* 1024`"
 
 threads="1"
 
-tdate=$(date "+%Y_%m_%d")
+tdate=$(date "+%Y_%m_%d_%H_%M_%S")
 
 bench_file_path="$(dirname $PWD )/db_bench"
 
