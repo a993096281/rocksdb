@@ -185,7 +185,7 @@ RUN_ONE_TEST() {
     FILL_PARAMS
     cmd="$bench_file_path $const_params >>out.out 2>&1"
     if [ "$1" == "numa" ];then
-        cmd="numactl -N 1 -m 1 $bench_file_path $const_params >>out.out 2>&1"
+        cmd="numactl -N 1 $bench_file_path $const_params >>out.out 2>&1"
     fi
 
     CLEAN_CACHE
