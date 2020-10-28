@@ -21,7 +21,7 @@ max_bytes_for_level_base="`expr 8 \* 1024 \* 1024 \* 1024`"
 threads="3"  ##一个线程记录每秒数据，一个线程生成请求队列，只有一个线程运行请求，
 
 histogram="true"
-request_rate_limit="20000"  #20K
+request_rate_limit="60000"  #60K
 per_queue_length="16"
 YCSB_uniform_distribution="false"
 
